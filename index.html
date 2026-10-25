@@ -597,6 +597,10 @@ function renderScare(dt) {
 /* ============================================================ LOOP */
 let last = performance.now();
 function frame(now) {
+  try { frameInner(now); } catch (e) { console.error(e); }
+  requestAnimationFrame(frame);
+}
+function frameInner(now) {
   const dt = clamp((now - last) / 1000, 0, .05); last = now;
   if (state === 'play') {
     updatePlayer(dt); updateCruncher(dt); updateEvents(dt);
@@ -606,7 +610,6 @@ function frame(now) {
   else if (state === 'title' || state === 'over' || state === 'won' || state === 'paused') {
     if (P) { C.prox = 0; shake = 0; render(); } else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
   }
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
@@ -618,19 +621,28 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { keys = {}; });
-addEventListener('mousemove', e => { if (state === 'play' && document.pointerLockElement === cv) P.a += e.movementX * .0023; });
+addEventListener('mousemove', e => { if (state === 'play' && (document.pointerLockElement === cv || dragging)) P.a += e.movementX * .0023; });
 document.addEventListener('pointerlockchange', () => {
   const was = locked; locked = document.pointerLockElement === cv;
   if (was && !locked && state === 'play') { state = 'paused'; $('t1').textContent = 'PAUSED'; $('sub').textContent = "he's still out there"; $('info').textContent = 'Click to resume.'; $('go').textContent = 'Resume'; $('warn').style.display = 'none'; $('screen').classList.remove('hidden'); keys = {}; }
 });
-$('go').addEventListener('click', () => {
-  initAudio(); if (AC && AC.state === 'suspended') AC.resume();
+function startFromButton() {
+  try { initAudio(); if (AC && AC.state === 'suspended') AC.resume(); } catch (e) { AC = null; }
   const resume = state === 'paused';
-  if (!resume) { initGame(); if (AC) { droneG.gain.value = .09; } }
+  if (!resume) { initGame(); try { if (AC) droneG.gain.value = .09; } catch (e) {} }
   $('screen').classList.add('hidden'); $('hud').style.display = 'block'; state = 'play'; last = performance.now();
   try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   if (!resume) setTimeout(() => say('Find 5 fuses. Power the exit door. Listen.', 6000), 800);
+}
+$('go').addEventListener('click', () => {
+  try { startFromButton(); }
+  catch (e) { $('warn').style.display = 'block'; $('warn').style.color = '#c44'; $('warn').textContent = 'Error: ' + e.message; }
 });
+addEventListener('keydown', e => { if ((e.code === 'Enter' || e.code === 'Space') && !$('screen').classList.contains('hidden')) $('go').click(); });
+addEventListener('error', e => { const w = $('warn'); w.style.display = 'block'; w.style.color = '#c44'; w.textContent = 'Error: ' + e.message; });
+let dragging = false;
+cv.addEventListener('mousedown', () => { dragging = true; });
+addEventListener('mouseup', () => { dragging = false; });
 window.__game = { get P() { return P; }, get C() { return C; }, get items() { return items; }, get state() { return state; }, kill, map: () => map };
 </script>
 </body>
